@@ -30,9 +30,9 @@ async def on_message(message):
 async def on_slash_command_error(ctx, error):
     await ctx.respond(eat=True)
     if isinstance(error, MissingPermissions):
-        await ctx.send("You are missing permission(s) to run this command.", delete_after=5)
+        await send_error(ctx, "You are missing permission(s) to run this command.")
     elif isinstance(error, MissingRole):
-        await ctx.send("You are missing role(s) to run this command.", delete_after=5)
+        await send_error(ctx, "You are missing role(s) to run this command.")
     else:
         raise error
 
@@ -54,6 +54,39 @@ async def _queue(ctx: SlashContext, state: int):
         await close_queue(ctx)
     elif state == 1:
         await open_queue(ctx)
+
+
+@slash.slash(name="set",
+             description="Set options for LabBot",
+             options=[manage_commands.create_option(
+                 name="signoffchannel",
+                 description="Set the voice channel for creating sign off rooms",
+                 option_type=7,
+                 required=False),
+
+                 manage_commands.create_option(
+                 name="helpchannel",
+                 description="Set the voice channel for creating help rooms",
+                 option_type=7,
+                 required=False)
+             ],
+             guild_ids=guild_ids)
+@has_role("Admin")
+async def _set(ctx: SlashContext, signoffchannel=None, helpchannel=None):
+    await ctx.respond(eat=True)
+    # TODO: sign off and help channels can't be the same
+    if signoffchannel is not None:
+        if isinstance(signoffchannel, discord.channel.VoiceChannel):
+            set_key("sign_off_channel", ctx.guild, signoffchannel.id)
+            await send_info(ctx, "Create sign off channel changed successfully!")
+        else:
+            await send_error(ctx, "The channel must be a voice channel.")
+    if helpchannel is not None:
+        if isinstance(helpchannel, discord.channel.VoiceChannel):
+            set_key("help_channel", ctx.guild, helpchannel.id)
+            await send_info(ctx, "Create help channel changed successfully!")
+        else:
+            await send_error(ctx, "The channel must be a voice channel.")
 
 
 async def open_queue(ctx):
@@ -86,6 +119,14 @@ async def delete_queue_message(guild: discord.guild):
             await bot.http.delete_message(old_message[0], old_message[1])
         except:
             pass
+
+
+async def send_error(ctx, message):
+    await ctx.send(f"❌ {message}", hidden=True)
+
+
+async def send_info(ctx, message):
+    await ctx.send(f"ℹ️ {message}", hidden=True)
 
 
 def get_key(key: str, guild: discord.guild, value_if_none=None):
