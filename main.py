@@ -44,7 +44,7 @@ async def on_slash_command_error(ctx, error):
                  description="Set the queue to this state",
                  option_type=4,
                  required=True,
-                 choices=[{"name": "open", "value": 1}, {"name": "close", "value": 1}])
+                 choices=[{"name": "open", "value": 1}, {"name": "close", "value": 0}])
              ],
              guild_ids=guild_ids)
 @has_role("Lab Assistant")
@@ -67,7 +67,7 @@ async def open_queue(ctx):
         await message.add_reaction(emoji)
     await delete_queue_message(ctx.guild)
     await message.pin()
-    set_key("queue_message", ctx.guild, [ctx.channel.guild, message.guild])
+    set_key("queue_message", ctx.guild, [ctx.channel.id, message.id])
 
 
 async def close_queue(ctx):
@@ -77,7 +77,7 @@ async def close_queue(ctx):
         ">>> :x: __**Lab Queue**__\n*The queue is now closed.*\n\nCome back next time to get signed off :slight_smile:")
     await delete_queue_message(ctx.guild)
     await message.pin()
-    set_key("queue_message", ctx.guild, [ctx.channel.guild, message.guild])
+    set_key("queue_message", ctx.guild, [ctx.channel.id, message.id])
 
 
 async def delete_queue_message(guild: discord.guild):
@@ -89,8 +89,8 @@ async def delete_queue_message(guild: discord.guild):
 
 
 def get_key(key: str, guild: discord.guild, value_if_none=None):
-    if str(guild.guild) + key in db.prefix(guild.guild):
-        return db[f"{guild.guild}{key}"]
+    if str(guild.id) + key in db.prefix(guild.id):
+        return db[f"{guild.id}{key}"]
     else:
         if value_if_none is not None:
             set_key(key, guild, value_if_none)
@@ -100,12 +100,12 @@ def get_key(key: str, guild: discord.guild, value_if_none=None):
 
 
 def set_key(key: str, guild: discord.guild, value):
-    db[f"{guild.guild}{key}"] = value
+    db[f"{guild.id}{key}"] = value
 
 
 def del_key(key: str, guild: discord.guild):
-    if key in db.prefix(guild.guild):
-        del db[f"{guild.guild}{key}"]
+    if key in db.prefix(guild.id):
+        del db[f"{guild.id}{key}"]
 
 
 keep_alive()
