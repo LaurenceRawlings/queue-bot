@@ -6,8 +6,9 @@ from discord.ext.commands import has_role, MissingPermissions
 from discord.ext.commands.errors import MissingRole
 from discord_slash import SlashCommand, SlashContext
 from discord_slash.utils import manage_commands
-from replit import db
 from keep_alive import keep_alive
+from database import db
+
 
 bot = commands.Bot(command_prefix="!")
 slash = SlashCommand(bot, sync_commands=True)
@@ -35,6 +36,24 @@ async def on_slash_command_error(ctx, error):
         await send_error(ctx, "You are missing role(s) to run this command.")
     else:
         raise error
+
+
+@bot.event
+async def on_voice_state_update(ctx, before, after):
+    sign_off_channel = db.get(ctx.guild.id, "add_sign_off_channel")
+    help_channel = db.get(ctx.guild.id, "add_help_channel")
+    waiting_channel = db.get(ctx.guild.id, "add_waiting_channel")
+
+    if (channel := after.channel) is not None:
+        if channel.id in [sign_off_channel, help_channel, waiting_channel]:
+            new_channel = await create_temp_voice_channel(ctx.guild, room_name(ctx.display_name), channel.category)
+            await ctx.edit(voice_channel=new_channel)
+
+    if (old_channel := before.channel) is not None:
+        if old_channel.id in db.get(ctx.guild.id, "temp_channels", default=[]):
+            if len(old_channel.members) == 0:
+                await old_channel.delete()
+                db.remove_array(ctx.guild.id, "temp_channels", old_channel.id)
 
 
 @slash.slash(name="queue",
@@ -68,30 +87,55 @@ async def _queue(ctx: SlashContext, state: int):
                  name="helpchannel",
                  description="Set the voice channel for creating help rooms",
                  option_type=7,
+                 required=False),
+
+                 manage_commands.create_option(
+                 name="waitingchannel",
+                 description="Set the voice channel for creating waiting rooms",
+                 option_type=7,
                  required=False)
              ],
              guild_ids=guild_ids)
 @has_role("Admin")
-async def _set(ctx: SlashContext, signoffchannel=None, helpchannel=None):
+async def _set(ctx: SlashContext, signoffchannel=None, helpchannel=None, waitingchannel=None):
     await ctx.respond(eat=True)
     # TODO: sign off and help channels can't be the same
     if signoffchannel is not None:
         if isinstance(signoffchannel, discord.channel.VoiceChannel):
-            set_key("sign_off_channel", ctx.guild, signoffchannel.id)
-            await send_info(ctx, "Create sign off channel changed successfully!")
+            db.set(ctx.guild.id, "add_sign_off_channel", signoffchannel.id)
+            await send_info(ctx, "Add sign off channel changed successfully!")
         else:
             await send_error(ctx, "The channel must be a voice channel.")
     if helpchannel is not None:
         if isinstance(helpchannel, discord.channel.VoiceChannel):
-            set_key("help_channel", ctx.guild, helpchannel.id)
-            await send_info(ctx, "Create help channel changed successfully!")
+            db.set(ctx.guild.id, "add_help_channel", helpchannel.id)
+            await send_info(ctx, "Add help channel changed successfully!")
+        else:
+            await send_error(ctx, "The channel must be a voice channel.")
+    if waitingchannel is not None:
+        if isinstance(waitingchannel, discord.channel.VoiceChannel):
+            db.set(ctx.guild.id, "add_waiting_channel", waitingchannel.id)
+            await send_info(ctx, "Add waiging channel changed successfully!")
         else:
             await send_error(ctx, "The channel must be a voice channel.")
 
 
+async def create_temp_voice_channel(guild: discord.Guild, name: str, category=None, position: int = None):
+        channel = await guild.create_voice_channel(name, category=category, position=position)
+        db.append_array(guild.id, "temp_channels", channel.id)
+        return channel
+
+
+def room_name(username: str):
+    if username[-1] == "s":
+        return f"{username}' Room"
+    else:
+        return f"{username}'s Room"
+
+
 async def open_queue(ctx):
     emojis = ["✅", "❓"]
-    set_key("queue_status", ctx.guild, True)
+    db.set(ctx.guild.id, "queue_status", True)
     await ctx.respond(eat=True)
     message = await ctx.send(
         f">>> :clipboard: __**Lab Queue**__\n*The queue is now open!*\n\nTo get signed off click {emojis[0]}\nTo get "
@@ -100,21 +144,21 @@ async def open_queue(ctx):
         await message.add_reaction(emoji)
     await delete_queue_message(ctx.guild)
     await message.pin()
-    set_key("queue_message", ctx.guild, [ctx.channel.id, message.id])
+    db.set(ctx.guild.id, "queue_message", [ctx.channel.id, message.id])
 
 
 async def close_queue(ctx):
-    set_key("queue_status", ctx.guild, False)
+    db.set(ctx.guild.id, "queue_status", False)
     await ctx.respond(eat=True)
     message = await ctx.send(
         ">>> :x: __**Lab Queue**__\n*The queue is now closed.*\n\nCome back next time to get signed off :slight_smile:")
     await delete_queue_message(ctx.guild)
     await message.pin()
-    set_key("queue_message", ctx.guild, [ctx.channel.id, message.id])
+    db.set(ctx.guild.id, "queue_message", [ctx.channel.id, message.id])    
 
 
 async def delete_queue_message(guild: discord.guild):
-    if old_message := get_key("queue_message", guild):
+    if old_message := db.get(guild.id, "queue_message", [0, 0]):
         try:
             await bot.http.delete_message(old_message[0], old_message[1])
         except:
@@ -127,26 +171,6 @@ async def send_error(ctx, message):
 
 async def send_info(ctx, message):
     await ctx.send(f"ℹ️ {message}", hidden=True)
-
-
-def get_key(key: str, guild: discord.guild, value_if_none=None):
-    if str(guild.id) + key in db.prefix(guild.id):
-        return db[f"{guild.id}{key}"]
-    else:
-        if value_if_none is not None:
-            set_key(key, guild, value_if_none)
-            return value_if_none
-        else:
-            return None
-
-
-def set_key(key: str, guild: discord.guild, value):
-    db[f"{guild.id}{key}"] = value
-
-
-def del_key(key: str, guild: discord.guild):
-    if key in db.prefix(guild.id):
-        del db[f"{guild.id}{key}"]
 
 
 keep_alive()

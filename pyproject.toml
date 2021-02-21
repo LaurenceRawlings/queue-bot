@@ -10,6 +10,7 @@ discord = "^1.0.1"
 replit = "^2.0.0"
 flask = "^1.1.2"
 discord-py-slash-command = "^1.0.9"
+firebase-admin = "^4.5.2"
 
 [tool.poetry.dev-dependencies]
 
