@@ -20,7 +20,7 @@ class Database:
                 "queue_channel": 0,
                 "queue_status": False,
                 "queue_message": [0, 0],
-                "temp_channels": [],
+                "queue_update_message": [0, 0],
                 "sign_off_queue": [],
                 "help_queue": [],
             })

@@ -40,6 +40,26 @@ async def on_slash_command_error(ctx, error):
 
 
 @bot.event
+async def on_reaction_add(reaction, user):
+    if reaction.message.id == db.get(user.guild.id, "queue_update_message", [0, 0])[1]:
+        if user == bot: return
+        if reaction.emoji != "✅":
+            await reaction.remove(user)
+            return
+        if user.voice == None:
+            await reaction.message.channel.send("❌ You must be in a voice channel!", delete_after=5)
+            await reaction.remove(user)
+        else:
+            queue = db.get(user.guild.id, "sign_off_queue", default=[])
+            await reaction.message.delete()
+            db.remove_array(user.guild.id, "sign_off_queue", queue[0])
+            user_waiting = await user.guild.fetch_member(queue[0])
+            await user_waiting.edit(voice_channel=user.voice.channel)
+            await update_queue_position(user_waiting, 0)
+            await queue_update(user.guild)
+
+
+@bot.event
 async def on_voice_state_update(ctx, before, after):
     create_room_channel_id = db.get(ctx.guild.id, "create_room_channel")
     create_waiting_room_channel_id = db.get(ctx.guild.id, "create_waiting_room_channel")
@@ -55,7 +75,7 @@ async def on_voice_state_update(ctx, before, after):
             if new_channel.id == create_room_channel_id: 
                 category_id = db.get(ctx.guild.id, "room_chats_category")
                 category = discord.utils.get(ctx.guild.categories, id=category_id)
-                await create_temp_channel(ctx.guild, room_name(ctx.display_name), "text", category=category, parent_id=new_channel.id)
+                await create_temp_channel(ctx.guild, room_name(ctx.display_name), "text", category=category, parent_id=temp_channel.id)
             elif new_channel.id == create_waiting_room_channel_id:
                 db.append_array(ctx.guild.id, "sign_off_queue", ctx.id)
                 queue = db.get(ctx.guild.id, "sign_off_queue", default=[])
@@ -164,10 +184,10 @@ async def create_temp_channel(guild: discord.Guild, name: str, channel_type, cat
         channel = await guild.create_text_channel(name, category=category, position=position, overwrites=overwrites)
 
     if parent_id is None:
-        temp_ref =  db.guild_ref(guild.id).collection("temp_channels").document(str(channel.id))
+        temp_ref = db.guild_ref(guild.id).collection("temp_channels").document(str(channel.id))
         temp_ref.set({"related": []})
     else:
-        temp_ref =  db.guild_ref(guild.id).collection("temp_channels").document(str(parent_id))
+        temp_ref = db.guild_ref(guild.id).collection("temp_channels").document(str(parent_id))
         if temp_ref.get() is None: 
             temp_ref.set({"related": []})
         temp_ref.update({"related": firestore.ArrayUnion([channel.id])})
