@@ -14,9 +14,10 @@ class Database:
 
         if not guild_ref.get().exists:
             guild_ref.set({
-                "add_sign_off_channel": 0,
-                "add_help_channel": 0,
-                "add_waiting_channel": 0,
+                "create_room_channel": 0,
+                "create_waiting_room_channel": 0,
+                "room_chats_category": 0,
+                "queue_channel": 0,
                 "queue_status": False,
                 "queue_message": [0, 0],
                 "temp_channels": [],

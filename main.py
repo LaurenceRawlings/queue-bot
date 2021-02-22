@@ -1,5 +1,6 @@
 import discord
 import os
+import re
 from discord.ext import commands
 from discord import MessageType
 from discord.ext.commands import has_role, MissingPermissions
@@ -40,22 +41,34 @@ async def on_slash_command_error(ctx, error):
 
 @bot.event
 async def on_voice_state_update(ctx, before, after):
-    sign_off_channel = db.get(ctx.guild.id, "add_sign_off_channel")
-    help_channel = db.get(ctx.guild.id, "add_help_channel")
-    waiting_channel = db.get(ctx.guild.id, "add_waiting_channel")
+    create_room_channel_id = db.get(ctx.guild.id, "create_room_channel")
+    create_waiting_room_channel_id = db.get(ctx.guild.id, "create_waiting_room_channel")
 
-    channel = after.channel
+    new_channel = after.channel
     old_channel = before.channel
 
-    if channel is not None:
-        if channel.id in [sign_off_channel, help_channel, waiting_channel]:
-            new_channel = await create_temp_channel(ctx.guild, room_name(ctx.display_name), "voice", channel.category)
-            await ctx.edit(voice_channel=new_channel)
+    if new_channel is not None:
+        if new_channel.id in [create_room_channel_id, create_waiting_room_channel_id]:
+            temp_channel = await create_temp_channel(ctx.guild, room_name(ctx.display_name), "voice", new_channel.category)
+            await ctx.edit(voice_channel=temp_channel)
 
-            if channel.id in [sign_off_channel, help_channel]: 
-                category_id = db.get(ctx.guild.id, "room_chat_category")
+            if new_channel.id == create_room_channel_id: 
+                category_id = db.get(ctx.guild.id, "room_chats_category")
                 category = discord.utils.get(ctx.guild.categories, id=category_id)
                 await create_temp_channel(ctx.guild, room_name(ctx.display_name), "text", category=category, parent_id=new_channel.id)
+            elif new_channel.id == create_waiting_room_channel_id:
+                db.append_array(ctx.guild.id, "sign_off_queue", ctx.id)
+                queue = db.get(ctx.guild.id, "sign_off_queue", default=[])
+                if len(queue) == 1:
+                    await queue_update(ctx.guild)
+                else:
+                    await update_queue_position(ctx, len(queue))
+    else:
+        queue = (db.get(ctx.guild.id, "sign_off_queue", default=[]))
+        db.remove_array(ctx.guild.id, "sign_off_queue", ctx.id)
+        await update_queue_position(ctx, 0)
+        if len(queue) > 0 and queue[0] == ctx.id:
+            await queue_update(ctx.guild)
 
 
     if old_channel is not None:
@@ -88,58 +101,58 @@ async def _queue(ctx: SlashContext, state: int):
 @slash.slash(name="set",
              description="Set options for LabBot",
              options=[manage_commands.create_option(
-                 name="signoffchannel",
-                 description="Set the voice channel for creating sign off rooms",
+                 name="create_room_channel",
+                 description="Set the voice channel for creating a room",
                  option_type=7,
                  required=False),
 
                  manage_commands.create_option(
-                 name="helpchannel",
-                 description="Set the voice channel for creating help rooms",
-                 option_type=7,
-                 required=False),
-
-                 manage_commands.create_option(
-                 name="waitingchannel",
+                 name="create_waiting_room_channel",
                  description="Set the voice channel for creating waiting rooms",
                  option_type=7,
                  required=False),
 
                  manage_commands.create_option(
-                 name="roomchatcategory",
+                 name="room_chats_category",
                  description="Set the category for room chats",
+                 option_type=7,
+                 required=False),
+
+                 manage_commands.create_option(
+                 name="queue_channel",
+                 description="Set the channel for queue updates",
                  option_type=7,
                  required=False)
              ],
              guild_ids=guild_ids)
 @has_role("Admin")
-async def _set(ctx: SlashContext, signoffchannel=None, helpchannel=None, waitingchannel=None, roomchatcategory=None):
+async def _set(ctx: SlashContext, create_room_channel=None, create_waiting_room_channel=None, room_chats_category=None, queue_channel=None):
     await ctx.respond(eat=True)
     # TODO: sign off and help channels can't be the same
-    if signoffchannel is not None:
-        if isinstance(signoffchannel, discord.channel.VoiceChannel):
-            db.set(ctx.guild.id, "add_sign_off_channel", signoffchannel.id)
-            await send_info(ctx, "Add sign off channel changed successfully!")
+    if create_room_channel is not None:
+        if isinstance(create_room_channel, discord.channel.VoiceChannel):
+            db.set(ctx.guild.id, "create_room_channel", create_room_channel.id)
+            await send_info(ctx, "Create room channel changed successfully!")
         else:
             await send_error(ctx, "The channel must be a voice channel.")
-    if helpchannel is not None:
-        if isinstance(helpchannel, discord.channel.VoiceChannel):
-            db.set(ctx.guild.id, "add_help_channel", helpchannel.id)
-            await send_info(ctx, "Add help channel changed successfully!")
+    if create_waiting_room_channel is not None:
+        if isinstance(create_waiting_room_channel, discord.channel.VoiceChannel):
+            db.set(ctx.guild.id, "create_waiting_room_channel", create_waiting_room_channel.id)
+            await send_info(ctx, "Create waiting room channel changed successfully!")
         else:
             await send_error(ctx, "The channel must be a voice channel.")
-    if waitingchannel is not None:
-        if isinstance(waitingchannel, discord.channel.VoiceChannel):
-            db.set(ctx.guild.id, "add_waiting_channel", waitingchannel.id)
-            await send_info(ctx, "Add waiting channel changed successfully!")
-        else:
-            await send_error(ctx, "The channel must be a voice channel.")
-    if roomchatcategory is not None:
-        if isinstance(roomchatcategory, discord.channel.CategoryChannel):
-            db.set(ctx.guild.id, "room_chat_category", roomchatcategory.id)
-            await send_info(ctx, "Room chat category changed successfully!")
+    if room_chats_category is not None:
+        if isinstance(room_chats_category, discord.channel.CategoryChannel):
+            db.set(ctx.guild.id, "room_chats_category", room_chats_category.id)
+            await send_info(ctx, "Room chats category changed successfully!")
         else:
             await send_error(ctx, "The channel must be a category.")
+    if queue_channel is not None:
+        if isinstance(queue_channel, discord.channel.TextChannel):
+            db.set(ctx.guild.id, "queue_channel", queue_channel.id)
+            await send_info(ctx, "Queue channel changed successfully!")
+        else:
+            await send_error(ctx, "The channel must be a text channel.")
 
 
 async def create_temp_channel(guild: discord.Guild, name: str, channel_type, category=None, position: int = None, overwrites=None, parent_id = None):
@@ -187,39 +200,74 @@ def room_name(username: str):
 
 
 async def open_queue(ctx):
-    emojis = ["✅", "❓"]
     db.set(ctx.guild.id, "queue_status", True)
     await ctx.respond(eat=True)
-    message = await ctx.send(
-        f">>> :clipboard: __**Lab Queue**__\n*The queue is now open!*\n\nTo get signed off click {emojis[0]}\nTo get "
-        f"help click {emojis[1]}")
-    for emoji in emojis:
-        await message.add_reaction(emoji)
     await delete_queue_message(ctx.guild)
+    message = await ctx.send(">>> :clipboard: __**Lab Queue**__\n*The queue is now open!*\n\nCreate or join a waiting room to enter the queue.")
     await message.pin()
     db.set(ctx.guild.id, "queue_message", [ctx.channel.id, message.id])
-    waiting_room = ctx.guild.get_channel(db.get(ctx.guild.id, "add_waiting_channel"))
+    waiting_room = ctx.guild.get_channel(db.get(ctx.guild.id, "create_waiting_room_channel"))
     await waiting_room.set_permissions(ctx.guild.default_role, overwrite=None)
+    await queue_update(ctx.guild)
 
 
 async def close_queue(ctx):
     db.set(ctx.guild.id, "queue_status", False)
     await ctx.respond(eat=True)
-    message = await ctx.send(
-        ">>> :x: __**Lab Queue**__\n*The queue is now closed.*\n\nCome back next time to get signed off :slight_smile:")
+    message = await ctx.send(">>> :x: __**Lab Queue**__\n*The queue is now closed.*\n\nCome back next time to get signed off :slight_smile:")
     await delete_queue_message(ctx.guild)
     await message.pin()
     db.set(ctx.guild.id, "queue_message", [ctx.channel.id, message.id])
-    waiting_room = ctx.guild.get_channel(db.get(ctx.guild.id, "add_waiting_channel"))
+    waiting_room = ctx.guild.get_channel(db.get(ctx.guild.id, "create_waiting_room_channel"))
     await waiting_room.set_permissions(ctx.guild.default_role, view_channel=False)
+    await delete_queue_update_message(ctx.guild)
+
+
+async def queue_update(guild: discord.Guild):
+    queue = db.get(guild.id, "sign_off_queue", default=[])
+    queue_channel = guild.get_channel(db.get(guild.id, "queue_channel"))
+
+    await delete_queue_update_message(guild)
+
+    if len(queue) > 0:
+        regex = re.compile(r" \(\d+\)")
+        user = await guild.fetch_member(queue[0])
+        message = await queue_channel.send(f">>> :stopwatch: __**Lab Queue**__\n*{regex.sub('', user.display_name)} is next in the queue.*\n\nTo move them to your room click ✅")
+        await message.add_reaction("✅")
+
+        for i in range(len(queue)):
+            user = await guild.fetch_member(queue[i])
+            await update_queue_position(user, i + 1, regex=regex)
+    else:
+        message = await queue_channel.send(">>> :stopwatch: __**Lab Queue**__\n*The queue is empty.*")
+
+    db.set(guild.id, "queue_update_message", [queue_channel.id, message.id])
+
+
+async def update_queue_position(user, position: int, regex=re.compile(r" \(\d+\)")):
+    try:
+        if position == 0:
+            await user.edit(nick=f"{regex.sub('', user.display_name)}")
+        else:
+            await user.edit(nick=f"{regex.sub('', user.display_name)} ({position})")
+    except:
+        pass
 
 
 async def delete_queue_message(guild: discord.guild):
-    if old_message := db.get(guild.id, "queue_message", [0, 0]):
-        try:
+    try:
+        if old_message := db.get(guild.id, "queue_message", [0, 0]):
             await bot.http.delete_message(old_message[0], old_message[1])
-        except:
-            pass
+    except:
+        pass
+
+
+async def delete_queue_update_message(guild: discord.guild):
+    try:
+        if old_message := db.get(guild.id, "queue_update_message", [0, 0]):
+            await bot.http.delete_message(old_message[0], old_message[1])
+    except:
+        pass
 
 
 async def send_error(ctx, message):
