@@ -9,13 +9,14 @@ class Database:
         self.db = firestore.client()
         print("Connected to the database...")
 
-    def _guild_ref(self, guild_id):
+    def guild_ref(self, guild_id):
         guild_ref = self.db.collection('guilds').document(str(guild_id))
 
         if not guild_ref.get().exists:
             guild_ref.set({
                 "add_sign_off_channel": 0,
                 "add_help_channel": 0,
+                "add_waiting_channel": 0,
                 "queue_status": False,
                 "queue_message": [0, 0],
                 "temp_channels": [],
@@ -26,7 +27,7 @@ class Database:
         return guild_ref
 
     def get(self, guild_id, key: str, default=None):
-        guild = self._guild_ref(guild_id).get()
+        guild = self.guild_ref(guild_id).get()
 
         if guild.exists:
             return guild.to_dict()[key]
@@ -34,15 +35,13 @@ class Database:
             return default
 
     def set(self, guild_id, key: str, value):
-        self._guild_ref(guild_id).set({
-            key: value
-        }, merge=True)
+        self.guild_ref(guild_id).set({key: value}, merge=True)
 
     def append_array(self, guild_id, key: str, value):
-        self._guild_ref(guild_id).update({key: firestore.ArrayUnion([value])})
+        self.guild_ref(guild_id).update({key: firestore.ArrayUnion([value])})
 
     def remove_array(self, guild_id, key: str, value):
-        self._guild_ref(guild_id).update({key: firestore.ArrayRemove([value])})
-    
+        self.guild_ref(guild_id).update({key: firestore.ArrayRemove([value])})
+
 
 db = Database()

@@ -44,16 +44,26 @@ async def on_voice_state_update(ctx, before, after):
     help_channel = db.get(ctx.guild.id, "add_help_channel")
     waiting_channel = db.get(ctx.guild.id, "add_waiting_channel")
 
-    if (channel := after.channel) is not None:
+    channel = after.channel
+    old_channel = before.channel
+
+    if channel is not None:
         if channel.id in [sign_off_channel, help_channel, waiting_channel]:
-            new_channel = await create_temp_voice_channel(ctx.guild, room_name(ctx.display_name), channel.category)
+            new_channel = await create_temp_channel(ctx.guild, room_name(ctx.display_name), "voice", channel.category)
             await ctx.edit(voice_channel=new_channel)
 
-    if (old_channel := before.channel) is not None:
-        if old_channel.id in db.get(ctx.guild.id, "temp_channels", default=[]):
+            if channel.id in [sign_off_channel, help_channel]: 
+                category_id = db.get(ctx.guild.id, "room_chat_category")
+                category = discord.utils.get(ctx.guild.categories, id=category_id)
+                await create_temp_channel(ctx.guild, room_name(ctx.display_name), "text", category=category, parent_id=new_channel.id)
+
+
+    if old_channel is not None:
+        temp_ids = [int(temp.id) for temp in db.guild_ref(ctx.guild.id).collection("temp_channels").stream()]
+        # User left a temp channel
+        if old_channel.id in temp_ids:
             if len(old_channel.members) == 0:
-                await old_channel.delete()
-                db.remove_array(ctx.guild.id, "temp_channels", old_channel.id)
+                await delete_temp_channel(ctx.guild, old_channel.id)
 
 
 @slash.slash(name="queue",
@@ -93,11 +103,17 @@ async def _queue(ctx: SlashContext, state: int):
                  name="waitingchannel",
                  description="Set the voice channel for creating waiting rooms",
                  option_type=7,
+                 required=False),
+
+                 manage_commands.create_option(
+                 name="roomchatcategory",
+                 description="Set the category for room chats",
+                 option_type=7,
                  required=False)
              ],
              guild_ids=guild_ids)
 @has_role("Admin")
-async def _set(ctx: SlashContext, signoffchannel=None, helpchannel=None, waitingchannel=None):
+async def _set(ctx: SlashContext, signoffchannel=None, helpchannel=None, waitingchannel=None, roomchatcategory=None):
     await ctx.respond(eat=True)
     # TODO: sign off and help channels can't be the same
     if signoffchannel is not None:
@@ -115,15 +131,52 @@ async def _set(ctx: SlashContext, signoffchannel=None, helpchannel=None, waiting
     if waitingchannel is not None:
         if isinstance(waitingchannel, discord.channel.VoiceChannel):
             db.set(ctx.guild.id, "add_waiting_channel", waitingchannel.id)
-            await send_info(ctx, "Add waiging channel changed successfully!")
+            await send_info(ctx, "Add waiting channel changed successfully!")
         else:
             await send_error(ctx, "The channel must be a voice channel.")
+    if roomchatcategory is not None:
+        if isinstance(roomchatcategory, discord.channel.CategoryChannel):
+            db.set(ctx.guild.id, "room_chat_category", roomchatcategory.id)
+            await send_info(ctx, "Room chat category changed successfully!")
+        else:
+            await send_error(ctx, "The channel must be a category.")
 
 
-async def create_temp_voice_channel(guild: discord.Guild, name: str, category=None, position: int = None):
-        channel = await guild.create_voice_channel(name, category=category, position=position)
-        db.append_array(guild.id, "temp_channels", channel.id)
-        return channel
+async def create_temp_channel(guild: discord.Guild, name: str, channel_type, category=None, position: int = None, overwrites=None, parent_id = None):
+    from firebase_admin import firestore
+
+    if (channel_type == "voice"):
+        channel = await guild.create_voice_channel(name, category=category, position=position, overwrites=overwrites)
+    else:
+        channel = await guild.create_text_channel(name, category=category, position=position, overwrites=overwrites)
+
+    if parent_id is None:
+        temp_ref =  db.guild_ref(guild.id).collection("temp_channels").document(str(channel.id))
+        temp_ref.set({"related": []})
+    else:
+        temp_ref =  db.guild_ref(guild.id).collection("temp_channels").document(str(parent_id))
+        if temp_ref.get() is None: 
+            temp_ref.set({"related": []})
+        temp_ref.update({"related": firestore.ArrayUnion([channel.id])})
+    
+    return channel
+
+
+async def delete_temp_channel(guild: discord.Guild, channel_id: int):
+    channel = guild.get_channel(channel_id)
+    if channel is not None: 
+        await channel.delete()
+    temp_ref = db.guild_ref(guild.id).collection("temp_channels").document(str(channel.id))
+    if (temp := temp_ref.get()) is None: return
+    try:
+        related_ids = temp.to_dict()["related"]
+        for related_id in related_ids:
+            related = guild.get_channel(related_id)
+            if related is not None: 
+                await related.delete()
+    except:
+        pass
+    temp_ref.delete()
 
 
 def room_name(username: str):
@@ -145,6 +198,8 @@ async def open_queue(ctx):
     await delete_queue_message(ctx.guild)
     await message.pin()
     db.set(ctx.guild.id, "queue_message", [ctx.channel.id, message.id])
+    waiting_room = ctx.guild.get_channel(db.get(ctx.guild.id, "add_waiting_channel"))
+    await waiting_room.set_permissions(ctx.guild.default_role, overwrite=None)
 
 
 async def close_queue(ctx):
@@ -154,7 +209,9 @@ async def close_queue(ctx):
         ">>> :x: __**Lab Queue**__\n*The queue is now closed.*\n\nCome back next time to get signed off :slight_smile:")
     await delete_queue_message(ctx.guild)
     await message.pin()
-    db.set(ctx.guild.id, "queue_message", [ctx.channel.id, message.id])    
+    db.set(ctx.guild.id, "queue_message", [ctx.channel.id, message.id])
+    waiting_room = ctx.guild.get_channel(db.get(ctx.guild.id, "add_waiting_channel"))
+    await waiting_room.set_permissions(ctx.guild.default_role, view_channel=False)
 
 
 async def delete_queue_message(guild: discord.guild):
