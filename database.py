@@ -1,48 +1,79 @@
 import firebase_admin
 from firebase_admin import credentials, firestore
+from enum import Enum
+from google.api_core.exceptions import NotFound
+
+cred = credentials.Certificate("firebase.json")
+firebase_admin.initialize_app(cred)
+db = firestore.client()
+print("Connected to the database...")
 
 
-class Database:
-    def __init__(self):
-        cred = credentials.Certificate("firebase.json")
-        firebase_admin.initialize_app(cred)
-        self.db = firestore.client()
-        print("Connected to the database...")
-
-    def guild_ref(self, guild_id):
-        guild_ref = self.db.collection('guilds').document(str(guild_id))
-
-        if not guild_ref.get().exists:
-            guild_ref.set({
-                "create_room_channel": 0,
-                "create_waiting_room_channel": 0,
-                "room_chats_category": 0,
-                "queue_channel": 0,
-                "queue_status": False,
-                "queue_message": [0, 0],
-                "queue_update_message": [0, 0],
-                "sign_off_queue": [],
-                "help_queue": [],
-            })
-
-        return guild_ref
-
-    def get(self, guild_id, key: str, default=None):
-        guild = self.guild_ref(guild_id).get()
-
-        if guild.exists:
-            return guild.to_dict()[key]
-        else:
-            return default
-
-    def set(self, guild_id, key: str, value):
-        self.guild_ref(guild_id).set({key: value}, merge=True)
-
-    def append_array(self, guild_id, key: str, value):
-        self.guild_ref(guild_id).update({key: firestore.ArrayUnion([value])})
-
-    def remove_array(self, guild_id, key: str, value):
-        self.guild_ref(guild_id).update({key: firestore.ArrayRemove([value])})
+class Collection(Enum):
+    guilds = "guilds"
+    temp_channels = "temp_channels"
+    queues = "queues"
 
 
-db = Database()
+class Key(Enum):
+    related = "related"
+    queue = "queue"
+    queue_status = "queue_status"
+    queue_updates_channel = "queue_updates_channel"
+    queue_status_message = "queue_status_message"
+    queue_update_message = "queue_update_message"
+    assistant_room_chats_category = "assistant_room_chats_category"
+    create_assistant_room_channel = "create_assistant_room_channel"
+
+
+def get(ref: firestore.firestore.DocumentReference, key: Key, default=None):
+    guild = ref.get()
+
+    if guild.exists:
+        return guild.to_dict()[key.name]
+    else:
+        return default
+
+
+def update(ref: firestore.firestore.DocumentReference, key: Key, value):
+    ref.set({key.name: value}, merge=True)
+
+
+def append_array(ref: firestore.firestore.DocumentReference, key: Key, value):
+    try:
+        ref.update({key.name: firestore.firestore.ArrayUnion([value])})
+    except NotFound:
+        update(ref, key, [])
+        ref.update({key.name: firestore.firestore.ArrayUnion([value])})
+
+
+def remove_array(ref: firestore.firestore.DocumentReference, key: Key, value):
+    try:
+        ref.update({key.name: firestore.firestore.ArrayRemove([value])})
+    except NotFound:
+        update(ref, key, [])
+        ref.update({key.name: firestore.firestore.ArrayRemove([value])})
+
+
+def guild_ref(guild_id: int) -> firestore.firestore.DocumentReference:
+    return db.collection(Collection.guilds.name).document(str(guild_id))
+
+
+def temp_channel_ref(guild_id: int, channel_id: int) -> firestore.firestore.DocumentReference:
+    return db.collection(Collection.guilds.name).document(str(guild_id)) \
+        .collection(Collection.temp_channels.name).document(str(channel_id))
+
+
+def temp_channels_ref(guild_id: int) -> firestore.firestore.CollectionReference:
+    return db.collection(Collection.guilds.name).document(str(guild_id)) \
+        .collection(Collection.temp_channels.name)
+
+
+def queue_ref(guild_id: int, queue_id: int) -> firestore.firestore.DocumentReference:
+    return db.collection(Collection.guilds.name).document(str(guild_id)) \
+        .collection(Collection.queues.name).document(str(queue_id))
+
+
+def queues_ref(guild_id: int) -> firestore.firestore.CollectionReference:
+    return db.collection(Collection.guilds.name).document(str(guild_id)) \
+        .collection(Collection.queues.name)

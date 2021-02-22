@@ -1,8 +1,8 @@
 [tool.poetry]
-name = "discord-bot-template"
+name = "lab-bot"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Laurence Rawlings <contact@laurencerawlings.com>"]
 
 [tool.poetry.dependencies]
 python = "^3.8"
@@ -11,6 +11,8 @@ replit = "^2.0.0"
 flask = "^1.1.2"
 discord-py-slash-command = "^1.0.9"
 firebase-admin = "^4.5.2"
+python-dotenv = "^0.15.0"
+google = "^3.0.0"
 
 [tool.poetry.dev-dependencies]
 
