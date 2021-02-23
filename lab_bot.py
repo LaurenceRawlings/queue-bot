@@ -136,6 +136,12 @@ async def on_queue_message_react(reaction: discord.Reaction, user: discord.Membe
         await update_queue_position(user_waiting, 0)
         await queue_update(user.guild, queue_id)
 
+        related_channel_ids = db.get(db.temp_channel_ref(user.guild.id, user.voice.channel.id), db.Key.related, [])
+
+        for related_channel_id in related_channel_ids:
+            related_channel = user.guild.get_channel(related_channel_id)
+            await related_channel.set_permissions(user_waiting, view_channel=True, send_messages=True)
+
 
 async def delete_queue_status_message(guild: discord.Guild):
     old_message = db.get(db.guild_ref(guild.id), db.Key.queue_status_message, [0, 0])

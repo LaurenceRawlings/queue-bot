@@ -116,6 +116,14 @@ async def on_voice_state_update(ctx, before, after):
         if old_channel.id in temp_channel_ids:
             if len(old_channel.members) == 0:
                 await bot.delete_temp_channel(ctx.guild, old_channel.id)
+            else:
+                related_channel_ids = db.get(db.temp_channel_ref(ctx.guild.id, old_channel.id), db.Key.related, [])
+                for related_channel_id in related_channel_ids:
+                    related_channel = ctx.guild.get_channel(related_channel_id)
+                    await related_channel.set_permissions(ctx, overwrite=None)
+
+                    if isinstance(related_channel, discord.TextChannel):
+                        await related_channel.purge(limit=100)
 
 
 @slash.slash(name="open",
