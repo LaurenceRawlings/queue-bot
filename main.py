@@ -63,7 +63,7 @@ async def on_slash_command_error(ctx, error):
 
 @client.event
 async def on_reaction_add(reaction, user):
-    if [reaction.message.channel, reaction.message.id] in \
+    if [reaction.message.channel.id, reaction.message.id] in \
             [queue.to_dict()[db.Key.queue_update_message.name] for queue in db.queues_ref(user.guild.id).stream()]:
         if user == client:
             return
@@ -103,13 +103,13 @@ async def on_voice_state_update(ctx, before, after):
     else:
         queues = db.queues_ref(ctx.guild.id).where(db.Key.queue.name, "array_contains", ctx.id).stream()
 
-        for queue_ref in queues:
-            db.remove_array(queue_ref, db.Key.queue, ctx.id)
+        for queue in queues:
+            db.remove_array(db.queue_ref(ctx.guild.id, int(queue.id)), db.Key.queue, ctx.id)
 
-            queue = queue_ref.to_dict()[db.Key.queue]
+            queue_list = queue.to_dict()[db.Key.queue.name]
             await bot.update_queue_position(ctx, 0)
-            if len(queue) > 0 and queue[0] == ctx.id:
-                await bot.queue_update(ctx.guild, int(queue_ref.id))
+            if len(queue_list) > 0 and queue_list[0] == ctx.id:
+                await bot.queue_update(ctx.guild, int(queue.id))
 
     if old_channel is not None:
         temp_channel_ids = [int(temp_channel.id) for temp_channel in db.temp_channels_ref(ctx.guild.id).stream()]
@@ -187,6 +187,20 @@ async def _set(ctx: SlashContext, create_assistant_room_channel=None, assistant_
 
     if len(message) > 0:
         await response(ctx, message)
+
+
+@slash.slash(name="new",
+             description="Create a new queue",
+             options=[manage_commands.create_option(
+                 name="name",
+                 description="The name for the new queue",
+                 option_type=3,
+                 required=True)],
+             guild_ids=guild_ids)
+@has_role("Admin")
+async def _set(ctx: SlashContext, name: str):
+    await bot.new_queue(ctx, name)
+    await response(ctx, info_message("New queue created successfully!"))
 
 
 if __name__ == "__main__":

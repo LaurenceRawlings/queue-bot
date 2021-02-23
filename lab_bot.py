@@ -44,6 +44,11 @@ def room_name(username: str):
         return f"{username}'s Room"
 
 
+async def new_queue(ctx, name: str):
+    channel = await ctx.guild.create_voice_channel(f"➕ Join {name} queue...")
+    db.update(db.queue_ref(ctx.guild.id, channel.id), db.Key.name, name)
+
+
 async def open_queue(ctx):
     for queue_channel in db.queues_ref(ctx.guild.id).stream():
         channel = ctx.guild.get_channel(int(queue_channel.id))
@@ -73,6 +78,7 @@ async def close_queue(ctx):
 
 async def queue_update(guild: discord.Guild, queue_id: int):
     queue = db.get(db.queue_ref(guild.id, queue_id), db.Key.queue, default=[])
+    queue_name = db.get(db.queue_ref(guild.id, queue_id), db.Key.name, default="Lab")
     queue_update_channel = guild.get_channel(db.get(db.guild_ref(guild.id), db.Key.queue_updates_channel))
 
     await delete_queue_update_message(guild, queue_id)
@@ -80,7 +86,7 @@ async def queue_update(guild: discord.Guild, queue_id: int):
     if len(queue) > 0:
         regex = re.compile(r" \(\d+\)")
         user = await guild.fetch_member(queue[0])
-        message = await queue_update_channel.send(f">>> :stopwatch: __**Lab Queue**__\n*"
+        message = await queue_update_channel.send(f">>> :stopwatch: __**{queue_name.title()} Queue**__\n*"
                                                   f"{regex.sub('', user.display_name)} is "
                                                   f"next in the queue.*\n\nTo move them to your room click ✅")
         await message.add_reaction("✅")
@@ -89,22 +95,32 @@ async def queue_update(guild: discord.Guild, queue_id: int):
             user = await guild.fetch_member(queue[i])
             await update_queue_position(user, i + 1, regex=regex)
     else:
-        message = await queue_update_channel.send(">>> :stopwatch: __**Lab Queue**__\n*The queue is empty.*")
+        message = await queue_update_channel.send(f">>> :stopwatch: __**{queue_name.title()} Queue**__"
+                                                  f"\n*The queue is empty.*")
 
-    db.update(db.guild_ref(guild.id), db.Key.queue_update_message, [queue_update_channel.id, message.id])
+    db.update(db.queue_ref(guild.id, queue_id), db.Key.queue_update_message, [queue_update_channel.id, message.id])
 
 
 async def update_queue_position(user: discord.Member, position: int, regex=re.compile(r" \(\d+\)")):
-    if position == 0:
-        await user.edit(nick=f"{regex.sub('', user.display_name)}")
-    else:
-        await user.edit(nick=f"{regex.sub('', user.display_name)} ({position})")
+    try:
+        if position == 0:
+            await user.edit(nick=f"{regex.sub('', user.display_name)}")
+        else:
+            await user.edit(nick=f"{regex.sub('', user.display_name)} ({position})")
+    except discord.errors.Forbidden:
+        pass
 
 
 async def on_queue_message_react(reaction: discord.Reaction, user: discord.Member):
     queues = db.queues_ref(user.guild.id).where(db.Key.queue_update_message.name, "==",
-                                                [reaction.message.channel, reaction.message.id]).stream()
-    queue_id = int(queues[0].id)
+                                                [reaction.message.channel.id, reaction.message.id]).stream()
+    queue_id = None
+    for queue in queues:
+        queue_id = int(queue.id)
+        break
+
+    if queue_id is None:
+        return
 
     if user.voice is None:
         await reaction.message.channel.send("❌ You must be in a voice channel!", delete_after=5)

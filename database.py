@@ -18,6 +18,7 @@ class Collection(Enum):
 class Key(Enum):
     related = "related"
     queue = "queue"
+    name = "name"
     queue_status = "queue_status"
     queue_updates_channel = "queue_updates_channel"
     queue_status_message = "queue_status_message"
@@ -30,9 +31,12 @@ def get(ref: firestore.firestore.DocumentReference, key: Key, default=None):
     guild = ref.get()
 
     if guild.exists:
-        return guild.to_dict()[key.name]
-    else:
-        return default
+        try:
+            return guild.to_dict()[key.name]
+        except KeyError:
+            pass
+
+    return default
 
 
 def update(ref: firestore.firestore.DocumentReference, key: Key, value):
