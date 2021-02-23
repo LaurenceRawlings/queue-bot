@@ -8,7 +8,7 @@ from discord_slash import SlashCommand, SlashContext
 from discord_slash.utils import manage_commands
 from dotenv import load_dotenv
 
-import lab_bot as bot
+import queue_bot as bot
 import database as db
 from keep_alive import keep_alive
 
