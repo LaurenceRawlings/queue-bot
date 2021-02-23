@@ -73,8 +73,13 @@ async def open_queue(ctx):
 
     await delete_queue_status_message(ctx.guild)
     db.update(db.guild_ref(ctx.guild.id), db.Key.queue_status, True)
-    message = await ctx.send(">>> :clipboard: __**Lab Queue**__\n*The queue is now open!*\n\nCreate a waiting "
-                             "room to enter the queue.")
+
+    embed = discord.Embed(title=u"Join the voice channel for the queue you want", colour=discord.Colour.blue(),
+                          description="Once in your waiting room feel free to join someone else's while you wait.")
+    embed.set_author(name="Queues are Open!", icon_url="https://cdn.discordapp.com/icons/812343984294068244/69241d42f3661678d61b3af3cfb04f45.png")
+    embed.set_footer(text="If you leave a voice channel in this server you will be removed from the queue!")
+
+    message = await ctx.send(embed=embed)
     await message.pin()
     db.update(db.guild_ref(ctx.guild.id), db.Key.queue_status_message, [ctx.channel.id, message.id])
 
@@ -86,8 +91,12 @@ async def close_queue(ctx):
 
     await delete_queue_status_message(ctx.guild)
     db.update(db.guild_ref(ctx.guild.id), db.Key.queue_status, False)
-    message = await ctx.send(">>> :x: __**Lab Queue**__\n*The queue is now closed.*\n\n"
-                             "Come back next time to get signed off :slight_smile:")
+
+    embed = discord.Embed(title=u"Come back next time", colour=discord.Colour.blue(),
+                          description="Turn on notifications for this channel to be notified when the queues open again!")
+    embed.set_author(name="Queues are Closed", icon_url="https://cdn.discordapp.com/icons/812343984294068244/69241d42f3661678d61b3af3cfb04f45.png")
+
+    message = await ctx.send(embed=embed)
     await message.pin()
     db.update(db.guild_ref(ctx.guild.id), db.Key.queue_status_message, [ctx.channel.id, message.id])
 
