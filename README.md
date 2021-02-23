@@ -1,4 +1,4 @@
-# ![Logo](https://cdn.discordapp.com/icons/812343984294068244/69241d42f3661678d61b3af3cfb04f45.png?size=32) QueueBot
+# ![Logo](media/icon.png) QueueBot
 
 Discord bot that puts users in a queue to wait for a designated assistant. Users wait in voice channels and then are
 moved into a private assistant room when they are ready to be seen.
