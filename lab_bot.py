@@ -44,9 +44,25 @@ def room_name(username: str):
         return f"{username}'s Room"
 
 
+def queue_role_name(name: str):
+    return f"{name.title()} Queue"
+
+
+async def create_queue_role(guild: discord.Guild, queue_id: int):
+    queue_name = db.get(db.queue_ref(guild.id, queue_id), db.Key.name)
+    role = await guild.create_role(name=queue_role_name(queue_name), hoist=True)
+
+    for queue_channel in db.queues_ref(guild.id).stream():
+        channel = guild.get_channel(int(queue_channel.id))
+        await channel.set_permissions(role, connect=False)
+
+    return role
+
+
 async def new_queue(ctx, name: str):
     channel = await ctx.guild.create_voice_channel(f"➕ Join {name} queue...")
     db.update(db.queue_ref(ctx.guild.id, channel.id), db.Key.name, name)
+    await create_queue_role(ctx.guild, channel.id)
 
 
 async def open_queue(ctx):

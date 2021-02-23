@@ -86,6 +86,7 @@ async def on_voice_state_update(ctx, before, after):
             room_name = bot.room_name(ctx.display_name)
             temp_channel = await bot.create_temp_channel(ctx.guild, room_name, "voice",
                                                          new_channel.category)
+
             await ctx.edit(voice_channel=temp_channel)
 
             if new_channel.id == create_assistant_room_channel_id:
@@ -94,12 +95,18 @@ async def on_voice_state_update(ctx, before, after):
                 await bot.create_temp_channel(ctx.guild, room_name, "text", category=category,
                                               parent_id=temp_channel.id)
             elif new_channel.id in create_waiting_room_channel_ids:
+                queue_name = db.get(db.queue_ref(ctx.guild.id, new_channel.id), db.Key.name, default="")
+                role = discord.utils.get(ctx.guild.roles, name=bot.queue_role_name(queue_name))
+                if role is None:
+                    role = await bot.create_queue_role(ctx.guild, new_channel.id)
+                await ctx.add_roles(role)
                 db.append_array(db.queue_ref(ctx.guild.id, new_channel.id), db.Key.queue, ctx.id)
                 queue = db.get(db.queue_ref(ctx.guild.id, new_channel.id), db.Key.queue, default=[])
                 if len(queue) == 1:
                     await bot.queue_update(ctx.guild, new_channel.id)
                 else:
                     await bot.update_queue_position(ctx, len(queue))
+
     else:
         queues = db.queues_ref(ctx.guild.id).where(db.Key.queue.name, "array_contains", ctx.id).stream()
 
@@ -110,6 +117,11 @@ async def on_voice_state_update(ctx, before, after):
             await bot.update_queue_position(ctx, 0)
             if len(queue_list) > 0 and queue_list[0] == ctx.id:
                 await bot.queue_update(ctx.guild, int(queue.id))
+
+            role_name = bot.queue_role_name(queue.to_dict()[db.Key.name.name])
+            role = discord.utils.get(ctx.guild.roles, name=role_name)
+            if role is not None:
+                await ctx.remove_roles(role)
 
     if old_channel is not None:
         temp_channel_ids = [int(temp_channel.id) for temp_channel in db.temp_channels_ref(ctx.guild.id).stream()]
