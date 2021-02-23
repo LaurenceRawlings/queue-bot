@@ -141,7 +141,7 @@ async def on_voice_state_update(ctx, before, after):
 @slash.slash(name="open",
              description="Opens all queues",
              guild_ids=guild_ids)
-@has_role("Lab Assistant")
+@has_role("QueueAdmin")
 async def _queue(ctx: SlashContext):
     await ctx.respond(eat=True)
     await bot.open_queue(ctx)
@@ -150,7 +150,7 @@ async def _queue(ctx: SlashContext):
 @slash.slash(name="close",
              description="Closes all queues",
              guild_ids=guild_ids)
-@has_role("Lab Assistant")
+@has_role("QueueAdmin")
 async def _queue(ctx: SlashContext):
     await ctx.respond(eat=True)
     await bot.close_queue(ctx)
@@ -177,7 +177,7 @@ async def _queue(ctx: SlashContext):
                      required=False)
              ],
              guild_ids=guild_ids)
-@has_role("Admin")
+@has_role("QueueAdmin")
 async def _set(ctx: SlashContext, create_assistant_room_channel=None, assistant_room_chats_category=None,
                queue_updates_channel=None):
     await ctx.respond(eat=True)
