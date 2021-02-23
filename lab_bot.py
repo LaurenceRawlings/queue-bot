@@ -158,6 +158,11 @@ async def on_queue_message_react(reaction: discord.Reaction, user: discord.Membe
             related_channel = user.guild.get_channel(related_channel_id)
             await related_channel.set_permissions(user_waiting, view_channel=True, send_messages=True)
 
+        role_name = queue_role_name(db.get(db.queue_ref(user.guild.id, queue_id), db.Key.name, ""))
+        role = discord.utils.get(user.guild.roles, name=role_name)
+        if role is not None:
+            await user_waiting.remove_roles(role)
+
 
 async def delete_queue_status_message(guild: discord.Guild):
     old_message = db.get(db.guild_ref(guild.id), db.Key.queue_status_message, [0, 0])
