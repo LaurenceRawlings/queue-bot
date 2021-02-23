@@ -62,10 +62,10 @@ Here are the slash commands that are essential for using QueueBot:
 
 ### /set
 
-Map your server channels that QueueBot should use with `/set`. Discord will help you will out the rest. Here are the
-required values that need to be set:
+Map your server channels that QueueBot should use with `/set <parameter>:<value>`. Discord will help you will out the
+rest, you can set multiple parameters at once. Here are the required parameters that need to be set:
 
-| Value                         | Description                                          | Requirement   |
+| Parameter                     | Description                                          | Requirement   |
 |-------------------------------|------------------------------------------------------|---------------|
 | create_assistant_room_channel | Set the voice channel for creating an assistant room | Voice Channel |
 | assistant_room_chats_category | Set the category for assistant room chats            | Category      |
@@ -73,16 +73,17 @@ required values that need to be set:
 
 ### /new
 
-use this command to create new queues. This will create new voice channels that act as entry points to the queues. Once
-created these can be moved to any position in your server.
+Use the `/new name:<queue name>` command to create new queues. This will create new voice channels that act as entry
+points to the queues. Once created these can be moved to any position in your server.
 
-| Value | Description                | Requirement |
-|-------|----------------------------|-------------|
-| Name  | The name for the new queue | String      |
+| Parameter | Description                | Requirement |
+|-----------|----------------------------|-------------|
+| Name      | The name for the new queue | String      |
 
 To delete a queue, simply just delete the voice channel.
 
 ### /open and /close
 
-These commands unlock and lock the queue entry voice channels respectively. The bot will also respond with an
-announcement message which gets pinned. It is best to use this command in a channel that can be viewed by everyone.
+The `/open` and `/close` commands unlock and lock the queue entry voice channels respectively. The bot will also respond
+with an announcement message which gets pinned. It is best to use this command in a channel that can be viewed by
+everyone.
