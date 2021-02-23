@@ -99,20 +99,25 @@ async def queue_update(guild: discord.Guild, queue_id: int):
 
     await delete_queue_update_message(guild, queue_id)
 
+    embed = discord.Embed(title=u"Next in queue:᲼᲼᲼᲼᲼᲼᲼᲼᲼᲼᲼᲼", colour=discord.Colour.blue())
+    embed.set_author(name=f"{queue_name.title()} Queue", icon_url="https://cdn.discordapp.com/icons/812343984294068244/69241d42f3661678d61b3af3cfb04f45.png")
+
     if len(queue) > 0:
         regex = re.compile(r" \(\d+\)")
         user = await guild.fetch_member(queue[0])
-        message = await queue_update_channel.send(f">>> :stopwatch: __**{queue_name.title()} Queue**__\n*"
-                                                  f"{regex.sub('', user.display_name)} is "
-                                                  f"next in the queue.*\n\nTo move them to your room click ✅")
-        await message.add_reaction("✅")
+        embed.description = user.display_name
+        embed.set_thumbnail(url=user.avatar_url)
+        embed.set_footer(text="To move them to your room click ✅")
 
         for i in range(len(queue)):
             user = await guild.fetch_member(queue[i])
             await update_queue_position(user, i + 1, regex=regex)
     else:
-        message = await queue_update_channel.send(f">>> :stopwatch: __**{queue_name.title()} Queue**__"
-                                                  f"\n*The queue is empty.*")
+        embed.description = "The queue is empty."
+
+    message = await queue_update_channel.send(embed=embed)
+    if len(queue) > 0:
+        await message.add_reaction("✅")
 
     db.update(db.queue_ref(guild.id, queue_id), db.Key.queue_update_message, [queue_update_channel.id, message.id])
 

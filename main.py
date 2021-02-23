@@ -65,7 +65,7 @@ async def on_slash_command_error(ctx, error):
 async def on_reaction_add(reaction, user):
     if [reaction.message.channel.id, reaction.message.id] in \
             [queue.to_dict()[db.Key.queue_update_message.name] for queue in db.queues_ref(user.guild.id).stream()]:
-        if user == client:
+        if user == client.user:
             return
         if reaction.emoji != "✅":
             await reaction.remove(user)
