@@ -1,33 +1,31 @@
 # ![Logo](media/icon.png) QueueBot
 
-Discord bot that puts users in a queue to wait for a designated assistant. Users wait in voice channels and then are
-moved into a private assistant room when they are ready to be seen.
+Queue Bot is a discord bot that puts users in a queue to wait for a designated assistant. Users wait in voice channels and are then moved into a private assistant room when they are ready to be seen.
 
 ## How it works
 
 *To run the slash commands, users must be given the `QueueAdmin` role!*
 
-1. Assistants join the `Create room` voice channel to generate their voice channel, along with an accompanying text
+1. Assistants join the `Create room` voice channel to generate their voice channel - along with an accompanying text
    channel which can be used to send links etc. The assistant is automatically moved into their new voice channel when
    it is created.
 
-2. Run the `/open` to open the queues. This will unlock the `Join queue` voice channels allowing users to connect and
-   join the respective queue. Once a user has connected they will be moved into their new waiting room. From here the
-   user is free to move into any other voice channel in the server, for example move to their friends waiting room to
-   chat while they wait. If a user disconnects from the server they will automatically be removed from the queue.
+2. Run the `/open` command to open the queues, this will unlock the `Join queue` voice channels allowing users to connect and
+   join the respective queue. Once a user has connected, they will be moved into their new waiting room. From here the
+   user is free to move into any other voice channel in the server. For example, move into their friend's waiting room to
+   chat while they wait - if a user disconnects from the server they will automatically be removed from the queue.
 
-3. Assistants will receive updates for each queue in the `queue` text channel. Updates will show user at the front of
-   each queue and assistants can accept that user into their room by reacting with ✅. Once accepted that user will be
-   removed from the queue.
+3. Assistants will receive updates for each queue in the `queue` text channel. Updates will show the users at the front of
+   each queue which assistants can accept by reacting with ✅. Once accepted that user will be removed from the queue.
+   
 
-4. The user and assistant can now chat in the voice channel. Also, the user will be given access to the assistants text
+4. The user and assistant can now chat in the voice channel, the user will also be given access to the assistants text
    chat.
+   
+5. Once finished, the user can disconnect and the assistant can accept the next person in the queue. Once disconnected,
+   the user will no longer have access to the assistants text chat or any messages that were sent in their session.
 
-5. Once finished the user can disconnect, and the assistant can accept the next person in the queue. Once disconnected
-   the user will no longer have access to the assistants text chat and any messages that were sent in their session will
-   be removed.
-
-6. Finally, the queues can be closed with `/close` which will lock the voice channels for joining queues, however anyone
+6. Finally, the queues can be closed with `/close` which will lock the voice channels for joining queues, however, anyone
    still in a queue will remain.
 
 ## Features
